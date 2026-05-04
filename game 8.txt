@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PICO Health: 強化跳躍與清理版</title>
+    <style>
+        :root {
+            --pico-bg: #1a1a2e;
+            --pico-hero: #4ea5ff;
+            --pico-door: #00f2fe;
+            --pico-hp: #ff4757;
+            --pico-gold: #f1c40f;
+        }
+
+        body {
+            font-family: '微軟正黑體', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            touch-action: none;
+            color: #fff;
+        }
+
+        #start-screen, #review-screen, #win-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(10, 10, 30, 0.98);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            text-align: center;
+        }
+
+        #review-screen, #win-screen { display: none; overflow-y: auto; padding: 20px; box-sizing: border-box; }
+
+        .start-btn {
+            background: linear-gradient(45deg, #4facfe 0%, #00f2fe 100%);
+            color: white; border: none; padding: 15px 40px;
+            font-size: 20px; border-radius: 30px; cursor: pointer;
+            margin-top: 20px; box-shadow: 0 4px 15px rgba(0, 242, 254, 0.4);
+        }
+
+        #ui-top { display: flex; justify-content: space-between; width: 100%; max-width: 800px; padding: 10px 20px; box-sizing: border-box; }
+
+        #question-box {
+            background: rgba(22, 33, 62, 0.8); border: 1px solid #4facfe;
+            padding: 15px; border-radius: 12px; width: 90%; max-width: 780px;
+            text-align: center; backdrop-filter: blur(5px); margin-bottom: 10px; min-height: 60px;
+        }
+
+        #game-wrapper { position: relative; width: 100%; max-width: 800px; }
+
+        canvas {
+            background-color: transparent; border: 2px solid #4facfe;
+            box-shadow: 0 0 20px rgba(79, 172, 254, 0.3); border-radius: 8px;
+            width: 100%; display: block;
+        }
+
+        .review-item {
+            background: #16213e; margin: 8px 0; padding: 12px;
+            border-left: 5px solid var(--pico-hp); text-align: left;
+            width: 100%; max-width: 600px; border-radius: 4px;
+        }
+
+        #mobile-controls {
+            display: none; width: 100%; justify-content: space-between;
+            padding: 20px; box-sizing: border-box; position: fixed; bottom: 20px; left: 0;
+        }
+
+        .control-btn {
+            width: 65px; height: 65px; background: rgba(255, 255, 255, 0.1);
+            border: 2px solid #4facfe; border-radius: 50%;
+            display: flex; justify-content: center; align-items: center; font-size: 24px;
+            user-select: none; color: white;
+        }
+
+        .chest-icon { font-size: 80px; animation: bounce 1.5s infinite; margin: 20px; }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+
+        @media (max-width: 850px) { #mobile-controls { display: flex; } }
+    </style>
+</head>
+<body>
+
+<div id="start-screen">
+    <h2>🌌 PICO 健康幻境：高跳挑戰</h2>
+    <div style="max-width: 85%; text-align: left; line-height: 1.6; background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; border: 1px solid #4facfe;">
+        <p>🚀 <b>跳躍增強：</b>跳躍力已大幅提升，可以跳回上方平台。</p>
+        <p>🧹 <b>答對清理：</b>答對題目後，其他錯誤選項會自動消失。</p>
+        <p>🎁 <b>終極大獎：</b>通過 20 關即可獲得永恆健康寶箱！</p>
+    </div>
+    <button class="start-btn" onclick="startGame()">進入幻境</button>
+</div>
+
+<div id="review-screen">
+    <h2 style="color:var(--pico-hp)">💔 挑戰中斷</h2>
+    <p>再試一次！寶箱就在 20 關後的終點！🎁</p>
+    <div id="review-list" style="width: 100%; display: flex; flex-direction: column; align-items: center; margin-bottom: 20px;"></div>
+    <button class="start-btn" onclick="location.reload()">重新挑戰</button>
+</div>
+
+<div id="win-screen">
+    <h2 style="color:var(--pico-gold)">✨ 傳說達成 ✨</h2>
+    <div class="chest-icon">🎁</div>
+    <div style="font-size: 24px; color: var(--pico-gold); margin-bottom: 20px;">獲得：【永恆健康傳說寶箱】</div>
+    <button class="start-btn" onclick="location.reload()">再次體驗</button>
+</div>
+
+<div id="ui-top">
+    <div id="status-hp">HP: ❤️❤️❤️</div>
+    <div id="status-score">SCORE: 0</div>
+</div>
+
+<div id="question-box">
+    <div id="q-level" style="font-size: 14px; color: #4facfe; margin-bottom: 5px;"></div>
+    <div id="q-text">讀取中...</div>
+</div>
+
+<div id="game-wrapper">
+    <canvas id="game-canvas" width="800" height="520"></canvas>
+    <div id="mobile-controls">
+        <div style="display:flex; gap:10px;">
+            <div class="control-btn" id="btn-left">⬅️</div>
+            <div class="control-btn" id="btn-right">➡️</div>
+        </div>
+        <div class="control-btn" id="btn-jump">⬆️</div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+
+    let quizBank = [
+        { q: "成人每日建議飲水量是體重(kg)乘以多少？", options: ["10ml", "20ml", "30-35ml", "100ml"], correct: 2 },
+        { q: "下列哪種運動最能增進心肺功能？", options: ["看電視", "慢跑", "睡覺", "滑手機"], correct: 1 },
+        { q: "洗手「內外夾弓大立腕」，最後動作是？", options: ["指尖", "手背", "手心", "手腕"], correct: 3 },
+        { q: "預防近視，用眼30分鐘應休息多久？", options: ["1分鐘", "10分鐘", "30分鐘", "不必"], correct: 1 },
+        { q: "正確刷牙法「貝氏刷牙法」，刷毛與牙齒夾角？", options: ["15度", "45度", "90度", "180度"], correct: 1 },
+        { q: "芭樂含哪種維生素最多？", options: ["A", "B", "C", "D"], correct: 2 },
+        { q: "BMI 是身體質量指數的簡稱嗎？", options: ["不是", "是", "可能是", "不確定"], correct: 1 },
+        { q: "下列何者是優質蛋白質來源？", options: ["糖果", "雞蛋", "汽水", "洋芋片"], correct: 1 },
+        { q: "睡眠不足主要會影響什麼？", options: ["免疫力", "頭髮長度", "指甲速度", "衣服縮水"], correct: 0 },
+        { q: "預防中暑應多喝什麼？", options: ["咖啡", "酒精", "白開水", "奶茶"], correct: 2 },
+        { q: "所謂「天天五蔬果」是指？", options: ["5種零食", "5份蔬果", "5杯飲料", "5顆糖"], correct: 1 },
+        { q: "久坐不動對心臟健康有害嗎？", options: ["有害", "有益", "沒差", "不清楚"], correct: 0 },
+        { q: "哪種運動能訓練肌肉力量？", options: ["舉重", "睡覺", "看漫畫", "吃東西"], correct: 0 },
+        { q: "流鼻血時應優先採取什麼動作？", options: ["頭後仰", "低頭微壓鼻翼", "塞衛生紙狂跑", "躺平"], correct: 1 },
+        { q: "維持健康體態最重要是？", options: ["不吃不喝", "運動與均衡飲食", "一直睡覺", "狂喝提神飲料"], correct: 1 },
+        { q: "多吃蔬果可以預防什麼問題？", options: ["便秘", "近視", "蛀牙", "頭髮掉落"], correct: 0 },
+        { q: "運動前應先做什麼以減少受傷？", options: ["吃大餐", "暖身", "洗澡", "睡覺"], correct: 1 },
+        { q: "預防蛀牙應每天至少刷牙幾次？", options: ["不必", "1次", "2次以上", "每週1次"], correct: 2 },
+        { q: "下列哪種飲料糖分通常最高？", options: ["無糖茶", "全糖珍奶", "白開水", "黑咖啡"], correct: 1 },
+        { q: "良好的心情對健康有幫助嗎？", options: ["有", "無", "看情況", "不確定"], correct: 0 }
+    ];
+
+    let currentLevel = 0;
+    let score = 0;
+    let hp = 3;
+    let doorOpen = false;
+    let gameStarted = false;
+    let isWaiting = false;
+    let animationId = null;
+    let platforms = [], coins = [], wrongAnswers = [], stars = [];
+
+    const player = {
+        x: 50, y: 50, vx: 0, vy: 0, size: 24,
+        onGround: false, speed: 4.5, jumpPower: -12.5, gravity: 0.45
+    };
+
+    const keys = {};
+
+    for(let i=0; i<80; i++) stars.push({ x: Math.random()*800, y: Math.random()*520, size: Math.random()*2, opacity: Math.random() });
+
+    function startGame() {
+        if (gameStarted) return;
+        document.getElementById('start-screen').style.display = 'none';
+        gameStarted = true;
+        initLevel();
+        gameLoop();
+    }
+
+    function generateMap() {
+        let canMove = currentLevel >= 9;
+        let speedVal = 0.002; 
+
+        platforms = [
+            { x: 50, y: 130, w: 200, h: 12, moveX: 0, range: 0, speed: 0 },
+            { x: 350, y: 130, w: 150, h: 12, moveX: 0, range: 0, speed: 0 },
+            { x: 550, y: 130, w: 200, h: 12, moveX: 0, range: 0, speed: 0 },
+            { x: 150, y: 280, w: 180, h: 12, moveX: canMove ? 1 : 0, range: 80, speed: speedVal, offset: 0 },
+            { x: 450, y: 280, w: 180, h: 12, moveX: canMove ? 1 : 0, range: 80, speed: speedVal * 1.5, offset: Math.PI },
+            { x: 0, y: 440, w: 320, h: 15, moveX: 0, range: 0, speed: 0 },
+            { x: 450, y: 440, w: 350, h: 15, moveX: 0, range: 0, speed: 0 }
+        ];
+
+        platforms.forEach(p => { p.startX = p.x; });
+        coins = []; 
+        const data = quizBank[currentLevel];
+        let availablePlatforms = [...platforms];
+        availablePlatforms.sort(() => Math.random() - 0.5);
+
+        data.options.forEach((opt, i) => {
+            const p = availablePlatforms[i % availablePlatforms.length];
+            const cx = p.x + (p.w/2) - 15;
+            const cy = p.y - 45;
+            coins.push({ x: cx, y: cy, text: opt, isCorrect: i === data.correct, collected: false, parentPlatform: p, pOffset: 0 });
+        });
+
+        player.x = 60; player.y = 80; player.vx = 0; player.vy = 0;
+    }
+
+    function initLevel() {
+        doorOpen = false;
+        isWaiting = true;
+        if (currentLevel > 0 && currentLevel % 5 === 0 && hp < 3) hp++;
+        generateMap();
+        updateUI();
+    }
+
+    function updateUI() {
+        document.getElementById('q-level').innerText = `STEP ${currentLevel + 1} / 20`;
+        document.getElementById('q-text').innerText = quizBank[currentLevel].q;
+        document.getElementById('status-hp').innerText = "HP: " + "❤️".repeat(hp);
+        document.getElementById('status-score').innerText = "SCORE: " + score;
+    }
+
+    function endChallenge(isWin) {
+        gameStarted = false;
+        if (isWin) {
+            document.getElementById('win-screen').style.display = 'flex';
+        } else {
+            document.getElementById('review-screen').style.display = 'flex';
+            const listDiv = document.getElementById('review-list');
+            listDiv.innerHTML = wrongAnswers.map(item => `<div class="review-item"><strong>問：${item.q}</strong><br><span style="color: #00f2fe;">正解：${item.a}</span></div>`).join('');
+        }
+    }
+
+    function loseHp() {
+        const currentQ = quizBank[currentLevel];
+        if (!wrongAnswers.find(item => item.q === currentQ.q)) {
+            wrongAnswers.push({ q: currentQ.q, a: currentQ.options[currentQ.correct] });
+        }
+        hp--;
+        if (hp <= 0) endChallenge(false);
+        else { updateUI(); player.x = 60; player.y = 80; isWaiting = true; }
+    }
+
+    window.addEventListener('keydown', e => { 
+        if(gameStarted) {
+            if(isWaiting && (e.code === 'Space' || e.code === 'ArrowUp')) isWaiting = false;
+            keys[e.code] = true; 
+        }
+    });
+    window.addEventListener('keyup', e => { if(gameStarted) keys[e.code] = false; });
+
+    const btnMap = { 'btn-left': 'ArrowLeft', 'btn-right': 'ArrowRight', 'btn-jump': 'ArrowUp' };
+    Object.keys(btnMap).forEach(id => {
+        const el = document.getElementById(id);
+        el.addEventListener('touchstart', (e) => { 
+            e.preventDefault(); 
+            if(gameStarted) { if(isWaiting) isWaiting = false; keys[btnMap[id]] = true; }
+        }, {passive: false});
+        el.addEventListener('touchend', (e) => { e.preventDefault(); if(gameStarted) keys[btnMap[id]] = false; }, {passive: false});
+    });
+
+    function update() {
+        if (!gameStarted || isWaiting) return;
+
+        platforms.forEach(p => {
+            if(p.moveX) {
+                let oldX = p.x;
+                p.x = p.startX + Math.sin(Date.now() * p.speed + (p.offset || 0)) * p.range;
+                if (player.onGround && player.y + player.size >= p.y - 5 && player.y + player.size <= p.y + 10 &&
+                    player.x + player.size > p.x && player.x < p.x + p.w) {
+                    player.x += (p.x - oldX);
+                }
+            }
+        });
+
+        if (keys['ArrowLeft']) player.vx = -player.speed;
+        else if (keys['ArrowRight']) player.vx = player.speed;
+        else player.vx *= 0.8;
+
+        if (keys['ArrowUp'] && player.onGround) {
+            player.vy = player.jumpPower;
+            player.onGround = false;
+        }
+
+        player.vy += player.gravity;
+        player.x += player.vx;
+        player.y += player.vy;
+        player.onGround = false;
+
+        platforms.forEach(p => {
+            if (player.x + player.size > p.x && player.x < p.x + p.w &&
+                player.y + player.size > p.y && player.y + player.size < p.y + p.h + 12 && player.vy >= 0) {
+                player.y = p.y - player.size;
+                player.vy = 0;
+                player.onGround = true;
+            }
+        });
+
+        coins.forEach(c => {
+            if (!c.collected) {
+                if(c.parentPlatform.moveX) {
+                    if(!c.pOffset) c.pOffset = c.x - c.parentPlatform.startX;
+                    c.x = c.parentPlatform.x + c.pOffset;
+                }
+                if (Math.abs(player.x - c.x) < 35 && Math.abs(player.y - c.y) < 45) {
+                    c.collected = true;
+                    if (c.isCorrect) {
+                        doorOpen = true; score += 100;
+                        // 核心修改：答對後清理所有剩餘硬幣
+                        coins.forEach(coin => { if(!coin.collected) coin.collected = true; });
+                        document.getElementById('q-text').innerText = "答對了！選項已清理，前往傳送門";
+                        document.getElementById('question-box').style.backgroundColor = "rgba(46, 204, 113, 0.4)";
+                    } else loseHp();
+                }
+            }
+        });
+
+        if (player.y > 520) loseHp();
+        if (player.x < 0) player.x = 0;
+        if (player.x > 800 - player.size) player.x = 800 - player.size;
+
+        if (doorOpen && player.x > 710 && player.y > 360) {
+            currentLevel++;
+            if (currentLevel < quizBank.length) {
+                initLevel();
+                document.getElementById('question-box').style.backgroundColor = "rgba(22, 33, 62, 0.8)";
+            }
+            else endChallenge(true);
+        }
+    }
+
+    function draw() {
+        let grad = ctx.createLinearGradient(0, 0, 0, 520);
+        grad.addColorStop(0, "#0f0c29"); grad.addColorStop(1, "#24243e");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 800, 520);
+
+        ctx.fillStyle = "white";
+        stars.forEach(s => {
+            ctx.globalAlpha = Math.abs(Math.sin(Date.now()*0.001 + s.opacity)*s.opacity);
+            ctx.fillRect(s.x, s.y, s.size, s.size);
+        });
+        ctx.globalAlpha = 1.0;
+        
+        platforms.forEach(p => {
+            ctx.fillStyle = "#4facfe";
+            ctx.shadowBlur = 10; ctx.shadowColor = "#4facfe";
+            ctx.fillRect(p.x, p.y, p.w, p.h);
+            ctx.shadowBlur = 0;
+        });
+        
+        coins.forEach(c => {
+            if (!c.collected) {
+                ctx.fillStyle = "#f1c40f"; ctx.shadowBlur = 15; ctx.shadowColor = "#f1c40f";
+                ctx.beginPath(); ctx.arc(c.x+15, c.y+15, 12, 0, Math.PI*2); ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = "white"; ctx.font = "bold 14px Arial"; ctx.textAlign = "center";
+                ctx.fillText(c.text, c.x + 15, c.y - 15);
+            }
+        });
+
+        if (doorOpen) {
+            ctx.fillStyle = "#00f2fe"; ctx.shadowBlur = 20; ctx.shadowColor = "#00f2fe";
+            ctx.fillRect(720, 370, 50, 70); ctx.shadowBlur = 0;
+        } else {
+            ctx.strokeStyle = "#4facfe"; ctx.strokeRect(720, 370, 50, 70);
+        }
+
+        ctx.fillStyle = "#fff"; ctx.fillRect(player.x, player.y, player.size, player.size);
+        ctx.fillStyle = "#4ea5ff"; ctx.fillRect(player.x+4, player.y+4, player.size-8, player.size-8);
+
+        if (isWaiting) {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.7)"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#00f2fe"; ctx.font = "bold 28px Arial"; ctx.textAlign = "center";
+            ctx.fillText("🌌 準備踏入下一層幻境 🌌", canvas.width / 2, canvas.height / 2);
+            ctx.font = "18px Arial"; ctx.fillStyle = "white";
+            ctx.fillText("按鍵盤或點擊螢幕開始此關卡", canvas.width / 2, canvas.height / 2 + 50);
+        }
+    }
+
+    function gameLoop() {
+        if (!gameStarted) return;
+        update(); draw();
+        animationId = requestAnimationFrame(gameLoop);
+    }
+</script>
+</body>
+</html>
